@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overtone Assignment</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.svg" alt="">
+    <div>
+      <div class="name">Overtone</div>
+      <div class="tag">Tuner &amp; Metronome</div>
+    </div>
+  </header>
+
+  <h1>Your practice assignment</h1>
+  <p class="lead">Your teacher sent you an assignment. It opens in the Overtone app on your iPhone or iPad.</p>
+  <div class="contact">
+    <a class="email" id="open" href="#">Open in Overtone</a>
+  </div>
+  <p>Nothing happened? Install Overtone from the App Store, then open your teacher's link again.</p>
+</main>
+<script>
+  // The assignment lives in the part after #, which never reaches the server; the app reads it from here.
+  const code = location.hash.slice(1);
+  const app = "overtone://assignment?d=" + encodeURIComponent(code);
+  document.getElementById("open").href = app;
+  if (code) location.replace(app);
+</script>
+</body>
+</html>

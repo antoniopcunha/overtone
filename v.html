@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check a Practice Report</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<style>
+  :root { --good: #3bcd7e; --bad: #f87171; }
+  .verdict { display: flex; gap: 14px; align-items: center; border-radius: 16px; padding: 18px 22px; margin: 8px 0 28px;
+             background: var(--panel); border: 1px solid var(--line); }
+  .verdict .icon { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+                   font-size: 22px; font-weight: 800; color: #fff; }
+  .verdict.good .icon { background: var(--good); }
+  .verdict.bad .icon { background: var(--bad); }
+  .verdict b { display: block; font-size: 19px; color: var(--text); }
+  .verdict span { color: var(--text-2); font-size: 15px; }
+  .who { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; margin: 0; color: var(--text); }
+  .sub { margin: 2px 0 20px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 24px; }
+  .stats div { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .stats b { display: block; font-size: 24px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .stats b.green { color: var(--good); }
+  .stats span { color: var(--text-2); font-size: 13px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; margin-bottom: 24px; }
+  th { text-align: left; color: var(--text-2); font-size: 13px; font-weight: 600; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--text); }
+  td.num, th.num { text-align: right; }
+  .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); font-weight: 700; }
+  @media (max-width: 420px) { .stats { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.svg" alt="">
+    <div>
+      <div class="name">Overtone</div>
+      <div class="tag">Practice report check</div>
+    </div>
+  </header>
+  <div id="out"><p>Checking…</p></div>
+</main>
+<script>
+// Public half of the key the app signs reports with.
+const PUBLIC_KEY = "ZIB420IoSk7vOQFybdMhMyBtMnGFoyAvSv6IeAkJKzY=";
+
+const bytes = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const dur = m => m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+const out = document.getElementById("out");
+
+function verdict(good, title, detail) {
+  return `<div class="verdict ${good ? "good" : "bad"}"><div class="icon">${good ? "✓" : "✕"}</div>
+    <div><b>${title}</b><span>${detail}</span></div></div>`;
+}
+
+async function check() {
+  const [payloadText, sigText] = location.hash.slice(1).split(".");
+  if (!payloadText || !sigText) {
+    out.innerHTML = verdict(false, "No report here", "Scan the QR code at the bottom of an Overtone practice report.");
+    return;
+  }
+  let payload, sig, ok = false;
+  try {
+    payload = bytes(payloadText);
+    sig = bytes(sigText);
+    const key = await crypto.subtle.importKey("raw", bytes(PUBLIC_KEY), { name: "Ed25519" }, false, ["verify"]);
+    ok = await crypto.subtle.verify({ name: "Ed25519" }, key, sig, payload);
+  } catch (e) {
+    if (e && e.name === "NotSupportedError") {
+      out.innerHTML = verdict(false, "This browser can't check reports", "Open this page in a current version of Safari, Chrome or Firefox.");
+      return;
+    }
+  }
+  if (!ok) {
+    out.innerHTML = verdict(false, "Not a genuine report", "This code wasn't made by Overtone, or it was changed after it was made.");
+    return;
+  }
+  const r = JSON.parse(new TextDecoder().decode(payload));
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", sig));
+  const hex = [...hash.slice(0, 4)].map(b => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+  const first = new Date(r.d + "T12:00:00");
+  const day = i => new Date(first.getTime() + i * 864e5);
+  const fmt = (d, o) => d.toLocaleDateString(undefined, o);
+  const played = r.p.reduce((a, b) => a + b, 0), open = r.o.reduce((a, b) => a + b, 0);
+
+  let html = verdict(true, "Genuine report", `Made by Overtone ${new Date(r.t * 1000).toLocaleString()}. Report <span class="id">${hex.slice(0, 4)}-${hex.slice(4)}</span>: it should match the one printed on the PDF.`);
+  html += `<p class="who">${esc(r.n) || "Practice Report"}</p>
+    <p class="sub">${[esc(r.i), fmt(day(0), { month: "short", day: "numeric" }) + " – " + fmt(day(r.p.length - 1), { month: "short", day: "numeric" })].filter(Boolean).join(" · ")}</p>
+    <div class="stats">
+      <div><b class="green">${dur(played)}</b><span>Played</span></div>
+      <div><b>${r.p.filter(m => m >= 1).length}/${r.p.length}</b><span>Days played</span></div>
+      <div><b>${dur(open)}</b><span>App open</span></div>
+    </div>`;
+  if (r.g) {
+    html += `<h2>Assignment${r.a ? " · " + esc(r.a) : ""}</h2><table><tr><th>Item</th><th class="num">Played</th><th class="num">Goal</th></tr>` +
+      r.g.map(([goal, got], i) => goal < 0
+        ? `<tr><td>${got >= 0 ? "✓ " : ""}Item ${i + 1}: sight-reading test</td><td class="num">${got >= 0 ? got + "%" : got === -2 ? "Not finished" : "Not taken"}</td><td class="num">One attempt</td></tr>`
+        : `<tr><td>${got >= goal ? "✓ " : ""}Item ${i + 1}</td><td class="num">${dur(got)}</td><td class="num">${dur(goal)}</td></tr>`).join("") +
+      `</table>`;
+  }
+  html += `<h2>Day by day</h2><table><tr><th>Day</th><th class="num">Played</th><th class="num">App open</th></tr>` +
+    r.p.map((m, i) => `<tr><td>${fmt(day(i), { weekday: "short", month: "short", day: "numeric" })}</td><td class="num">${dur(m)}</td><td class="num">${dur(r.o[i])}</td></tr>`).join("") +
+    `</table><p>Played is the time the microphone heard a clear note while practising in Overtone. App open is all the time the app was on screen. If any number here differs from the PDF, the PDF was edited.</p>`;
+  out.innerHTML = html;
+}
+check();
+</script>
+</body>
+</html>
