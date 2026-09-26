@@ -104,7 +104,7 @@ async function check() {
   }
   html += `<h2>Day by day</h2><table><tr><th>Day</th><th class="num">Played</th><th class="num">App open</th></tr>` +
     r.p.map((m, i) => `<tr><td>${fmt(day(i), { weekday: "short", month: "short", day: "numeric" })}</td><td class="num">${dur(m)}</td><td class="num">${dur(r.o[i])}</td></tr>`).join("") +
-    `</table><p>Played is the time the microphone heard a clear note while practising in Overtone. App open is all the time the app was on screen. If any number here differs from the PDF, the PDF was edited.</p>`;
+    `</table>`;
   out.innerHTML = html;
 }
 check();
